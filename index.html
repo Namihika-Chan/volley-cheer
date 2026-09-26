@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<meta name="theme-color" content="#111111" />
+<title>バレー応援 名前めくり</title>
+<style>
+  :root{--bg:#111;--fg:#fff;--muted:#aaa;--panel:#1c1c1e;--line:#3a3a3c;--accent:#fff;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;overscroll-behavior:none}
+  button,input,textarea{font:inherit}
+  button{color:inherit}
+  #app{height:100dvh;min-height:100%;display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  .top{height:58px;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;position:relative;z-index:5}
+  .counter{font-size:18px;font-weight:700;letter-spacing:.04em;color:#d1d1d6}
+  .iconbtn{border:1px solid var(--line);background:rgba(28,28,30,.9);border-radius:12px;min-width:48px;height:42px;padding:0 12px;font-size:20px;font-weight:700}
+  #cheerView{flex:1;display:flex;flex-direction:column;min-height:0}
+  #tapArea{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;cursor:pointer;user-select:none;touch-action:manipulation;position:relative}
+  #name{font-size:clamp(54px,18vw,150px);font-weight:900;line-height:1.05;word-break:keep-all;overflow-wrap:anywhere;text-shadow:0 2px 12px rgba(0,0,0,.2)}
+  #hint{position:absolute;bottom:18px;left:0;right:0;font-size:14px;color:#777;pointer-events:none}
+  .bottom{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;padding:10px 12px 14px}
+  .btn{border:1px solid var(--line);background:var(--panel);border-radius:14px;min-height:52px;font-size:17px;font-weight:800}
+  .btn.primary{background:#f2f2f7;color:#111;border-color:#f2f2f7}
+  #done{display:none;flex:1;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:24px;gap:24px}
+  #done h1{font-size:clamp(42px,13vw,92px);margin:0}
+  #done p{margin:0;color:var(--muted);font-size:18px}
+  #done .btn{padding:0 28px}
+  #settings{display:none;position:fixed;inset:0;background:#111;z-index:20;padding:calc(12px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));overflow:auto}
+  .settingsHead{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:700px;margin:0 auto 18px}
+  .settingsHead h2{margin:0;font-size:24px}
+  .settingsBody{max-width:700px;margin:auto}
+  .help{color:#aaa;line-height:1.6;font-size:14px;margin:0 0 12px}
+  textarea{width:100%;min-height:42vh;resize:vertical;border:1px solid var(--line);border-radius:14px;background:#1c1c1e;color:#fff;padding:14px;font-size:19px;line-height:1.6;outline:none}
+  textarea:focus{border-color:#888}
+  .settingsActions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .small{font-size:13px;color:#777;margin-top:12px;line-height:1.5}
+  .empty{font-size:28px;color:#aaa;font-weight:800}
+  @media (orientation:landscape){
+    .top{height:50px}.bottom{padding-bottom:8px}.btn{min-height:46px}
+    #name{font-size:clamp(48px,14vh,120px)} #hint{bottom:8px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top" id="topbar">
+    <div class="counter" id="counter">0 / 0</div>
+    <button class="iconbtn" id="settingsBtn" aria-label="設定">⚙</button>
+  </div>
+
+  <div id="cheerView">
+    <main id="tapArea" aria-label="タップで次の選手">
+      <div id="name" class="empty">選手を登録してください</div>
+      <div id="hint">画面をタップで次の選手へ</div>
+    </main>
+    <div class="bottom">
+      <button class="btn" id="backBtn">◀ 戻る</button>
+      <button class="btn primary" id="nextBtn">次へ ▶</button>
+    </div>
+  </div>
+
+  <section id="done">
+    <h1>全員終了！</h1>
+    <p id="doneCount"></p>
+    <button class="btn primary" id="restartBtn">最初に戻る</button>
+  </section>
+</div>
+
+<section id="settings" aria-modal="true" role="dialog">
+  <div class="settingsHead">
+    <h2>選手名の設定</h2>
+    <button class="iconbtn" id="closeSettings" aria-label="閉じる">✕</button>
+  </div>
+  <div class="settingsBody">
+    <p class="help">表示したい順番に、1行に1人ずつ入力してください。実際に呼ぶ名前（例：さくら！）をそのまま入力できます。</p>
+    <textarea id="namesInput" placeholder="さくら！&#10;みお！&#10;あかり！"></textarea>
+    <div class="settingsActions">
+      <button class="btn" id="clearBtn">全て消す</button>
+      <button class="btn primary" id="saveBtn">保存して開始</button>
+    </div>
+    <p class="small">名前はこの端末のブラウザ内に保存されます。HTMLファイル単体で動作し、インターネット接続は不要です。</p>
+  </div>
+</section>
+
+<script>
+(() => {
+  const KEY = 'volleyCheerNames_v1';
+  let names = [];
+  let index = 0;
+  const $ = id => document.getElementById(id);
+
+  function load(){
+    try { names = JSON.parse(localStorage.getItem(KEY) || '[]'); }
+    catch(e){ names = []; }
+    if(!Array.isArray(names)) names=[];
+    render();
+  }
+  function render(){
+    $('done').style.display='none';
+    $('cheerView').style.display='flex';
+    $('topbar').style.display='flex';
+    if(!names.length){
+      $('counter').textContent='0 / 0';
+      $('name').textContent='選手を登録してください';
+      $('name').className='empty';
+      $('hint').textContent='右上の ⚙ から選手名を登録';
+      $('backBtn').disabled=true; $('nextBtn').disabled=true;
+      return;
+    }
+    if(index < 0) index=0;
+    if(index >= names.length){ showDone(); return; }
+    $('name').className='';
+    $('name').textContent=names[index];
+    $('counter').textContent=`${index+1} / ${names.length}`;
+    $('hint').textContent='画面をタップで次の選手へ';
+    $('backBtn').disabled=index===0;
+    $('nextBtn').disabled=false;
+  }
+  function next(){ if(!names.length) return; index++; render(); }
+  function back(){ if(!names.length || index<=0) return; index--; render(); }
+  function showDone(){
+    $('cheerView').style.display='none';
+    $('topbar').style.display='flex';
+    $('counter').textContent=`${names.length} / ${names.length}`;
+    $('done').style.display='flex';
+    $('doneCount').textContent=`${names.length}人の名前を呼び終わりました`;
+  }
+  function openSettings(){
+    $('namesInput').value=names.join('\n');
+    $('settings').style.display='block';
+    setTimeout(()=>$('namesInput').focus(),100);
+  }
+  function closeSettings(){ $('settings').style.display='none'; }
+  function save(){
+    names=$('namesInput').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    localStorage.setItem(KEY, JSON.stringify(names));
+    index=0; closeSettings(); render();
+  }
+
+  $('tapArea').addEventListener('click', next);
+  $('nextBtn').addEventListener('click', next);
+  $('backBtn').addEventListener('click', back);
+  $('settingsBtn').addEventListener('click', openSettings);
+  $('closeSettings').addEventListener('click', closeSettings);
+  $('saveBtn').addEventListener('click', save);
+  $('clearBtn').addEventListener('click', () => { $('namesInput').value=''; $('namesInput').focus(); });
+  $('restartBtn').addEventListener('click', () => { index=0; render(); });
+  document.addEventListener('keydown', e => {
+    if($('settings').style.display==='block') return;
+    if(e.key==='ArrowRight' || e.key===' ' || e.key==='Enter') next();
+    if(e.key==='ArrowLeft') back();
+  });
+  load();
+})();
+</script>
+</body>
+</html>
